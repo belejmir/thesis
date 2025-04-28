@@ -1,0 +1,522 @@
+<system>
+  <config>
+    <boolean name="xhcidbg_enabled" value="false"/>
+    <boolean name="dbgserver_console_forwarding" value="false"/>
+    <boolean name="dbgserver_serial_enabled" value="true"/>
+    <boolean name="dbgserver_sink_pcspkr" value="false"/>
+    <boolean name="dbgserver_sink_shmem" value="false"/>
+    <boolean name="ahci_drv_enabled" value="false"/>
+    <boolean name="pciconf_emulation_enabled" value="false"/>
+    <string name="logchannel_size" value="16#0002_0000#"/>
+    <boolean name="unikernel_resettable" value="true"/>
+  </config>
+  <include href="common_expressions.xml"/>
+  <memory>
+    <include href="common_memory.xml"/>
+    <memory name="control_unikernel_sm" size="16#1000#" caching="WB">
+      <fill pattern="16#ff#"/>
+      <hash value="none"/>
+    </memory>
+    <memory name="status_unikernel_sm" size="16#1000#" caching="WB">
+      <fill pattern="16#00#"/>
+      <hash value="none"/>
+    </memory>
+    <!-- Memory regions for the backend_sm -->
+    <memory name="control_backend_sm" size="16#1000#" caching="WB">
+      <fill pattern="16#ff#"/>
+      <hash value="none"/>
+    </memory>
+    <memory name="status_backend_sm" size="16#1000#" caching="WB">
+      <fill pattern="16#00#"/>
+      <hash value="none"/>
+    </memory>
+    <if variable="unikernel_resettable" value="true">
+      <memory name="control_unikernel" size="16#1000#" caching="WB">
+        <fill pattern="16#ff#"/>
+        <hash value="none"/>
+      </memory>
+      <memory name="status_unikernel" size="16#1000#" caching="WB">
+        <fill pattern="16#00#"/>
+        <hash value="none"/>
+      </memory>
+      <!-- Memory regions for backend -->
+      <memory name="status_backend" size="16#1000#" caching="WB">
+	<fill pattern="16#00#"/>
+        <hash value="none"/>
+      </memory>
+      <memory name="control_backend" size="16#1000#" caching="WB">
+	<fill pattern="16#ff#"/>
+	<hash value="none"/> 
+      </memory>
+    </if>
+  </memory>
+  <deviceDomains>
+    <domain name="nic_domain">
+      <memory>
+        <memory logical="dma1" physical="nic_linux|lowmem" virtualAddress="16#0002_0000#" writable="true" executable="false"/>
+        <memory logical="dma2" physical="nic_linux|ram" virtualAddress="16#0100_0000#" writable="true" executable="false"/>
+      </memory>
+      <devices>
+        <device logical="first_nic" physical="ethernet_controller_1"/>
+        <device logical="additional_nics" physical="additional_nics"/>
+      </devices>
+    </domain>
+  </deviceDomains>
+  <events>
+    <include href="common_events.xml"/>
+    <if variable="unikernel_resettable" value="true">
+      <event name="unikernel_reset" mode="self"/>
+      <!-- Event for the reset of backend -->
+      <event name="backend_reset" mode="self"/>
+    </if>
+    <event name="resume_unikernel_1" mode="switch"/>
+    <!-- Event for resuming backend -->
+    <event name="resume_unikernel_2" mode="switch"/>
+    <event name="trap_to_sm_3" mode="switch"/>
+    <!-- Event for the trap of backend for backend_sm -->
+    <event name="trap_to_sm_4" mode="switch"/>
+  </events>
+  <channels>
+    <include href="common_channels.xml"/>
+    <channel name="debuglog_subject6" size="$logchannel_size"/>
+    <channel name="debuglog_subject7" size="$logchannel_size"/>
+    <!-- Debug channel for backend -->
+    <channel name="debuglog_subject8" size="$logchannel_size"/>
+    <!-- Debug channel for backend_sm -->
+    <channel name="debuglog_subject9" size="$logchannel_size"/>
+    <channel name="unikernel_service_in" size="16#0010_0000#"/>
+    <channel name="unikernel_service_out" size="16#0010_0000#"/>
+    <!-- Channels for communication unikernel<->backend -->
+    <channel name="unikernel_secret_in" size="16#0010_0000#"/>
+    <channel name="unikernel_secret_out" size="16#0010_0000#"/>
+  </channels>
+  <components>
+    <component name="unikernel" profile="native">
+      <config>
+        <boolean name="resettable" value="true"/>
+        <string name="bootparams" value=""/>
+      </config>
+      <depends>
+        <library ref="libmudebuglog"/>
+        <library ref="libmutime"/>
+        <library ref="muinit"/>
+      </depends>
+      <requires>
+        <vcpu>
+          <vmx>
+            <masks>
+              <exception>
+                <DivideError>0</DivideError>
+                <Debug>0</Debug>
+                <Breakpoint>0</Breakpoint>
+                <Overflow>0</Overflow>
+                <BOUNDRangeExceeded>0</BOUNDRangeExceeded>
+                <InvalidOpcode>0</InvalidOpcode>
+                <DeviceNotAvailable>0</DeviceNotAvailable>
+                <DoubleFault>0</DoubleFault>
+                <CoprocessorSegmentOverrun>0</CoprocessorSegmentOverrun>
+                <InvalidTSS>0</InvalidTSS>
+                <SegmentNotPresent>0</SegmentNotPresent>
+                <StackSegmentFault>0</StackSegmentFault>
+                <GeneralProtection>0</GeneralProtection>
+                <PageFault>0</PageFault>
+                <x87FPUFloatingPointError>0</x87FPUFloatingPointError>
+                <AlignmentCheck>0</AlignmentCheck>
+                <SIMDFloatingPointException>0</SIMDFloatingPointException>
+              </exception>
+            </masks>
+          </vmx>
+          <msrs>
+            <msr end="16#c000_0100#" mode="rw" start="16#c000_0100#"/>
+          </msrs>
+          <registers>
+            <gpr>
+              <rip>16#0020_0040#</rip>
+              <rsp>16#2094_cff8#</rsp>
+              <rdi>16#0000_1000#</rdi>
+            </gpr>
+            <cr4>
+              <OSSupportSIMDExceptions>1</OSSupportSIMDExceptions>
+            </cr4>
+          </registers>
+        </vcpu>
+        <channels>
+          <reader logical="service|in" virtualAddress="16#2094_d000#" size="16#0010_0000#"/>
+	  <writer logical="service|out" virtualAddress="16#20a4_d000#" size="16#0010_0000#"/>
+	  <reader logical="secret|out" virtualAddress="16#20b4_d000#" size="16#0010_0000#"/>
+	  <writer logical="secret|in" virtualAddress="16#20c4_d000#" size="16#0010_0000#"/>
+        </channels>
+      </requires>
+      <provides>
+        <memory executable="false" logical="boot_info" size="16#1000#" type="subject_solo5_boot_info" virtualAddress="16#1000#" writable="false">
+          <file filename="unikernel_bi" offset="none"/>
+        </memory>
+        <memory logical="text" virtualAddress="16#0020_0000#" size="16#0034_c000#" executable="true" writable="false" type="subject_binary">
+          <file filename="frontend-server.muen" offset="16#1000#"/>
+        </memory>
+        <memory logical=".note.solo5.manifest+.note.solo5.abi+.note.solo5.no.." virtualAddress="16#0054_c000#" size="16#0009_f000#" executable="false" writable="false" type="subject_binary">
+          <file filename="frontend-server.muen" offset="16#0034_d000#"/>
+        </memory>
+        <memory logical=".data" virtualAddress="16#005e_b000#" size="16#0035_5000#" executable="false" writable="true" type="subject_binary">
+          <file filename="frontend-server.muen" offset="16#003e_c000#"/>
+        </memory>
+        <memory logical=".tdata+.bss|fill" virtualAddress="16#0094_0000#" size="16#d000#" executable="false" writable="true" type="subject_binary">
+          <fill pattern="16#00#"/>
+        </memory>
+        <memory logical="ram" virtualAddress="16#0094_d000#" size="16#2000_0000#" executable="false" writable="true" type="subject"/>
+      </provides>
+    </component>
+    <component name="backend" profile="native">
+    <config>
+      <boolean name="resettable" value="true"/>
+      <string name="bootparams" value=""/>
+    </config>
+    <depends>
+      <library ref="libmudebuglog"/>
+      <library ref="libmutime"/>
+      <library ref="muinit"/>
+    </depends>
+    <requires>
+      <vcpu>
+        <vmx>
+          <masks>
+            <exception>
+              <DivideError>0</DivideError>
+              <Debug>0</Debug>
+              <Breakpoint>0</Breakpoint>
+              <Overflow>0</Overflow>
+              <BOUNDRangeExceeded>0</BOUNDRangeExceeded>
+              <InvalidOpcode>0</InvalidOpcode>
+              <DeviceNotAvailable>0</DeviceNotAvailable>
+              <DoubleFault>0</DoubleFault>
+              <CoprocessorSegmentOverrun>0</CoprocessorSegmentOverrun>
+              <InvalidTSS>0</InvalidTSS>
+              <SegmentNotPresent>0</SegmentNotPresent>
+              <StackSegmentFault>0</StackSegmentFault>
+              <GeneralProtection>0</GeneralProtection>
+              <PageFault>0</PageFault>
+              <x87FPUFloatingPointError>0</x87FPUFloatingPointError>
+              <AlignmentCheck>0</AlignmentCheck>
+              <SIMDFloatingPointException>0</SIMDFloatingPointException>
+            </exception>
+          </masks>
+        </vmx>
+        <msrs>
+          <msr end="16#c000_0100#" mode="rw" start="16#c000_0100#"/>
+        </msrs>
+        <registers>
+          <gpr>
+            <rip>16#0020_0040#</rip>
+            <rsp>16#208c_0ff8#</rsp>
+            <rdi>16#0000_1000#</rdi>
+          </gpr>
+          <cr4>
+            <OSSupportSIMDExceptions>1</OSSupportSIMDExceptions>
+          </cr4>
+        </registers>
+      </vcpu>
+      <channels>
+        <reader logical="secret|in" virtualAddress="16#208c_1000#" size="16#0010_0000#"/>
+        <writer logical="secret|out" virtualAddress="16#209c_1000#" size="16#0010_0000#"/>
+      </channels>
+    </requires>
+    <provides>
+      <memory executable="false" logical="boot_info" size="16#1000#" type="subject_solo5_boot_info" virtualAddress="16#1000#" writable="false">
+        <file filename="unikernel_bi" offset="none"/>
+      </memory>
+      <memory logical="text" virtualAddress="16#0020_0000#" size="16#0030_a000#" executable="true" writable="false" type="subject_binary">
+        <file filename="backend-server.muen" offset="16#1000#"/>
+      </memory>
+      <memory logical=".note.solo5.manifest+.note.solo5.abi+.note.solo5.no.." virtualAddress="16#0050_a000#" size="16#0009_5000#" executable="false" writable="false" type="subject_binary">
+        <file filename="backend-server.muen" offset="16#0030_b000#"/>
+      </memory>
+      <memory logical=".data" virtualAddress="16#0059_f000#" size="16#0031_5000#" executable="false" writable="true" type="subject_binary">
+        <file filename="backend-server.muen" offset="16#003a_0000#"/>
+      </memory>
+      <memory logical=".tdata+.bss|fill" virtualAddress="16#008b_4000#" size="16#d000#" executable="false" writable="true" type="subject_binary">
+        <fill pattern="16#00#"/>
+      </memory>
+      <memory logical="ram" virtualAddress="16#008c_1000#" size="16#2000_0000#" executable="false" writable="true" type="subject"/>
+    </provides>
+    </component>
+  </components>
+  <subjects>
+    <include href="subject_vt.xml"/>
+    <include href="subject_nic_sm.xml"/>
+    <include href="subject_storage_sm.xml"/>
+    <include href="subject_time.xml"/>
+    <include href="subject_nic_sl.xml"/>
+    <include href="subject_ps2.xml"/>
+    <include href="subject_controller.xml"/>
+    <subject name="dbgserver">
+      <events>
+        <source>
+          <group name="vmx_exit">
+            <default physical="system_panic">
+              <system_panic/>
+            </default>
+          </group>
+        </source>
+      </events>
+      <component ref="dbgserver">
+        <map logical="log_channel1" physical="debuglog_subject1"/>
+        <map logical="log_channel2" physical="debuglog_subject2"/>
+        <map logical="log_channel3" physical="debuglog_subject3"/>
+        <map logical="log_channel4" physical="debuglog_subject4"/>
+        <map logical="log_channel5" physical="debuglog_subject5"/>
+        <map logical="log_channel6" physical="debuglog_subject6"/>
+	<map logical="log_channel7" physical="debuglog_subject7"/>
+	<!-- Channel for the backend -->
+	<map logical="log_channel9" physical="debuglog_subject8"/>
+	<!-- Channel for the backend_sm -->
+	<map logical="log_channel10" physical="debuglog_subject9"/>
+        <map logical="log_channel8" physical="debuglog_controller"/>
+        <include href="subject_dbgserver_common.xml"/>
+        <if variable="dbgserver_console_forwarding" value="true">
+          <map logical="subject_console_in_1" physical="console_in_1"/>
+	  <map logical="subject_console_in_2" physical="console_in_2"/>
+          <map logical="subject_console_out_1" physical="console_out_1"/>
+          <map logical="subject_console_out_2" physical="console_out_2"/>
+        </if>
+      </component>
+    </subject>
+    <subject name="nic_linux">
+      <bootparams>console=hvc console=ttyS0 hostname=lnx1 unikernel_iface=service</bootparams>
+      <if variable="dbgserver_console_forwarding" value="false">
+        <bootparams>hvc_muen.out=virtual_console</bootparams>
+      </if>
+      <if variable="dbgserver_console_forwarding" value="true">
+        <bootparams>hvc_muen.out=virtual_console,hvc1_output hvc_muen.in=,hvc1_input</bootparams>
+      </if>
+      <memory>
+        <memory logical="initramfs" physical="initramfs" virtualAddress="16#7000_0000#" writable="false" executable="false"/>
+      </memory>
+      <devices>
+        <device logical="eth0" physical="ethernet_controller_1"/>
+      </devices>
+      <events>
+        <source>
+          <group name="vmx_exit">
+            <default physical="trap_to_sm_1"/>
+          </group>
+          <group name="vmcall">
+            <event id="30" logical="reboot" physical="request_reset_slot_1"/>
+            <event id="31" logical="timer" physical="timer_linux_1"/>
+          </group>
+        </source>
+        <target>
+          <event logical="resume_after_trap" physical="resume_linux_1"/>
+          <event id="63" logical="reset" physical="reset_linux_1">
+            <reset/>
+          </event>
+          <event id="62" logical="reset_from_vt" physical="reset_slot_1">
+            <reset/>
+          </event>
+          <event logical="serial_irq4" physical="serial_irq4_linux_1">
+            <inject_interrupt vector="52"/>
+          </event>
+          <event logical="timer" physical="timer_linux_1">
+            <inject_interrupt vector="236"/>
+          </event>
+        </target>
+      </events>
+      <channels>
+        <reader logical="virtual_input" physical="virtual_input_1" virtualAddress="16#3000#" vector="49"/>
+        <writer logical="virtual_console" physical="virtual_console_1" virtualAddress="16#4000#" event="1"/>
+        <reader logical="testchannel_2" physical="testchannel_2" virtualAddress="16#000e_00f0_0000#"/>
+        <writer logical="testchannel_1" physical="testchannel_1" virtualAddress="16#000e_00f0_1000#"/>
+        <reader logical="testchannel_4" physical="testchannel_4" virtualAddress="16#000e_00f0_2000#"/>
+        <writer logical="testchannel_3" physical="testchannel_3" virtualAddress="16#000e_0100_2000#"/>
+        <if variable="dbgserver_console_forwarding" value="true">
+          <reader logical="hvc1_input" physical="console_in_1" vector="auto"/>
+          <writer logical="hvc1_output" physical="console_out_1"/>
+        </if>
+        <writer logical="service|in" physical="unikernel_service_in" virtualAddress="16#000e_0300_0000#"/>
+	<reader logical="service|out" physical="unikernel_service_out" virtualAddress="16#000e_0310_0000#"/>
+      </channels>
+      <component ref="linux">
+        <map logical="lowmem" physical="nic_linux|lowmem"/>
+        <map logical="ram" physical="nic_linux|ram"/>
+      </component>
+    </subject>
+    <subject name="storage_linux">
+      <bootparams>console=hvc console=ttyS0 hostname=lnx2</bootparams>
+      <if variable="dbgserver_console_forwarding" value="false">
+        <bootparams>hvc_muen.out=virtual_console</bootparams>
+      </if>
+      <if variable="dbgserver_console_forwarding" value="true">
+        <bootparams>hvc_muen.out=virtual_console,hvc1_output hvc_muen.in=,hvc1_input</bootparams>
+      </if>
+      <memory>
+        <memory logical="initramfs" physical="initramfs" virtualAddress="16#7000_0000#" writable="false" executable="false"/>
+      </memory>
+      <devices>
+        <device logical="xhci" physical="usb_controller_1"/>
+      </devices>
+      <events>
+        <source>
+          <group name="vmx_exit">
+            <default physical="trap_to_sm_2"/>
+          </group>
+          <group name="vmcall">
+            <event id="31" logical="timer" physical="timer_linux_2"/>
+          </group>
+        </source>
+        <target>
+          <event logical="resume_after_trap" physical="resume_linux_2"/>
+          <event id="63" logical="reset" physical="reset_linux_2">
+            <reset/>
+          </event>
+          <event logical="serial_irq4" physical="serial_irq4_linux_2">
+            <inject_interrupt vector="52"/>
+          </event>
+          <event logical="timer" physical="timer_linux_2">
+            <inject_interrupt vector="236"/>
+          </event>
+        </target>
+      </events>
+      <channels>
+        <reader logical="virtual_input" physical="virtual_input_2" virtualAddress="16#3000#" vector="49"/>
+        <writer logical="virtual_console" physical="virtual_console_2" virtualAddress="16#4000#" event="1"/>
+        <reader logical="testchannel_1" physical="testchannel_1" virtualAddress="16#000e_00f0_0000#"/>
+        <writer logical="testchannel_2" physical="testchannel_2" virtualAddress="16#000e_00f0_1000#"/>
+        <reader logical="testchannel_3" physical="testchannel_3" virtualAddress="16#000e_00f0_2000#"/>
+        <writer logical="testchannel_4" physical="testchannel_4" virtualAddress="16#000e_0100_2000#"/>
+        <if variable="dbgserver_console_forwarding" value="true">
+          <reader logical="hvc1_input" physical="console_in_2" vector="auto"/>
+          <writer logical="hvc1_output" physical="console_out_2"/>
+        </if>
+      </channels>
+      <component ref="linux">
+        <map logical="lowmem" physical="storage_linux|lowmem"/>
+        <map logical="ram" physical="storage_linux|ram"/>
+      </component>
+    </subject>
+    <subject name="unikernel_sm">
+      <events>
+        <source>
+          <group name="vmx_exit">
+            <default physical="system_panic">
+              <system_panic/>
+            </default>
+          </group>
+        </source>
+      </events>
+      <monitor>
+        <state subject="unikernel" logical="monitor_state" virtualAddress="16#001e_0000#" writable="true"/>
+        <loader logical="reload" subject="unikernel_sm" virtualAddress="16#0000#"/>
+      </monitor>
+      <component ref="sm">
+        <map logical="time_info" physical="time_info"/>
+        <map logical="debuglog" physical="debuglog_subject6"/>
+	<map logical="resume_subject" physical="resume_unikernel_1"/>
+	<map logical="handle_subject_trap" physical="trap_to_sm_3"/>
+        <map logical="status" physical="status_unikernel_sm"/>
+        <map logical="control" physical="control_unikernel_sm"/>
+      </component>
+    </subject>
+    <subject name="unikernel">
+      <bootparams></bootparams>
+      <events>
+        <source>
+          <group name="vmx_exit">
+            <default physical="trap_to_sm_3"/>
+          </group>
+          <group name="vmcall">
+            <if variable="unikernel_resettable" value="true">
+              <event id="0" logical="solo5_exit" physical="unikernel_reset"/>
+            </if>
+          </group>
+        </source>
+        <target>
+          <event logical="resume_after_trap" physical="resume_unikernel_1"/>
+          <if variable="unikernel_resettable" value="true">
+            <event logical="solo5_exit" physical="unikernel_reset">
+              <reset/>
+            </event>
+          </if>
+        </target>
+      </events>
+      <if variable="unikernel_resettable" value="true">
+        <monitor>
+          <loader subject="unikernel" logical="reload" virtualAddress="16#0000#"/>
+        </monitor>
+      </if>
+      <component ref="unikernel">
+        <map logical="time_info" physical="time_info"/>
+        <map logical="debuglog" physical="debuglog_subject7"/>
+        <if variable="unikernel_resettable" value="true">
+          <map logical="status" physical="status_unikernel"/>
+          <map logical="control" physical="control_unikernel"/>
+        </if>
+        <map logical="service|in" physical="unikernel_service_in"/>
+	<map logical="service|out" physical="unikernel_service_out"/>
+	<map logical="secret|in" physical="unikernel_secret_in"/>
+	<map logical="secret|out" physical="unikernel_secret_out"/>
+      </component>
+    </subject>
+    <subject name="backend_sm">
+      <events>
+        <source>
+          <group name="vmx_exit">
+            <default physical="system_panic">
+              <system_panic/>
+            </default>
+          </group>
+        </source>
+      </events>
+      <monitor>
+        <state subject="backend" logical="monitor_state" virtualAddress="16#001e_0000#" writable="true"/>
+        <loader logical="reload" subject="backend_sm" virtualAddress="16#0000#"/>
+      </monitor>
+      <component ref="sm">
+        <map logical="time_info" physical="time_info"/>
+        <map logical="debuglog" physical="debuglog_subject9"/>
+        <map logical="resume_subject" physical="resume_unikernel_2"/>
+        <map logical="handle_subject_trap" physical="trap_to_sm_4"/>
+        <map logical="status" physical="status_backend_sm"/>
+        <map logical="control" physical="control_backend_sm"/>
+      </component>
+    </subject>
+    <subject name="backend">
+     <bootparams/>
+     <events>
+        <source>
+          <group name="vmx_exit">
+            <default physical="trap_to_sm_4"/>
+          </group>
+          <group name="vmcall">
+            <if variable="unikernel_resettable" value="true">
+              <event id="0" logical="solo5_exit" physical="backend_reset"/>
+            </if>
+          </group>
+        </source>
+        <target>
+          <event logical="resume_after_trap" physical="resume_unikernel_2"/>
+          <if variable="unikernel_resettable" value="true">
+            <event logical="solo5_exit" physical="backend_reset">
+              <reset/>
+            </event>
+          </if>
+        </target>
+      </events>
+     <if variable="unikernel_resettable" value="true">
+      <monitor>
+       <loader subject="backend" logical="reload" virtualAddress="16#0000#"/>
+      </monitor>
+     </if>
+     <component ref="backend">
+      <map logical="time_info" physical="time_info"/>
+      <map logical="debuglog" physical="debuglog_subject8"/>
+      <if variable="unikernel_resettable" value="true">
+        <map logical="status" physical="status_backend"/>
+        <map logical="control" physical="control_backend"/>
+      </if>
+      <map logical="secret|in" physical="unikernel_secret_in"/>
+      <map logical="secret|out" physical="unikernel_secret_out"/>
+     </component>
+    </subject>
+  </subjects>
+  <include href="scheduling_plans.xml"/>
+</system>
+
