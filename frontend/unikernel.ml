@@ -42,12 +42,12 @@ module Main
     Cohttp_lwt.Body.to_string body >>= fun body_str ->
     let response_body = "This will be hashed-> " ^ body_str in
     Logs.info ~src:Logs.default (fun f -> f "Response Body: %s" response_body);
-    (*forward_request uri body_str resolver conduit >>= fun (response, response_body) ->
-    Logs.info ~src:Logs.default (fun f -> f "Response body from forwared request: %s" response_body);*)
+    forward_request uri body_str resolver conduit >>= fun (response, response_body) ->
+    Logs.info ~src:Logs.default (fun f -> f "Response body from forwared request: %s" response_body);
     
         
-    let headers = Cohttp.Header.init_with "Content-Type" "text/plain" in
-    let response = Cohttp.Response.make ~status:`OK ~headers () in 
+    (*let headers = Cohttp.Header.init_with "Content-Type" "text/plain" in
+    let response = Cohttp.Response.make ~status:`OK ~headers () in *)
     Lwt.return (response, Cohttp_lwt.Body.of_string response_body)
 
 
